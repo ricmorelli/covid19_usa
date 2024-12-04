@@ -82,8 +82,7 @@ covid19_usa <-
 
 str(covid19_usa)
 
-# I'm going to create a new table that I can join to where needed for labeling 
-# and some other ideas I want to explore.
+# I'm going to create a new table that I can join to where needed for labeling and some other ideas I want to explore.
 state_data <- tibble::tribble(
   ~state,          ~abbreviation,     ~government_party,    ~area_kmsq,
   "Alabama",       "AL",              "Republican",         "135767",
