@@ -1,10 +1,14 @@
-# Let's take an initial look: what is the relationship between population and mortality?
-# Did some states observe disproportionately high or low COVID19 mortality relative to their population?
+# Gotta start somewhere: I'm not overly enthusiastic about the abundance of cumulative and absolute values in
+# our data set as they are not comparable between states of varying populations. As mentioned previously,
+# we will need to create new variables that are proportional to a state's population to make them useful in comparisons.
+# I'm going to focus this part of my exploration on mortality (proportion of deaths to confirmed cases):
+
+# What do I want to know?
+# 1. What is the relationship between population and mortality?
+# 2. Did some states observe disproportionately high or low COVID19 mortality relative to their population?
 
 covid19_usa |>
   left_join(state_data, join_by(state)) |> 
-  filter(date < '2023-01-01') |>
-  filter(!is.na(government_party)) |> 
   group_by(state, abbreviation) |> 
   mutate(
     mortality = (deaths / confirmed),
