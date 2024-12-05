@@ -117,7 +117,7 @@ covid19_usa |>
   guides(colour = "none") +
   labs(
     title = "COVID19 Mortality by US State",
-    subtitle = "More densely populated states observed higher mortality rates, on average",
+    subtitle = "More densely populated states observed higher mortality rates on average",
     caption = "Data from covid19datahub.io",
     x = "Population Density (people per sq. km)",
     y = "Mortality Rate"
