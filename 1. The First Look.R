@@ -6,9 +6,6 @@ library(scales)
 library(ggrepel)
 library(ggthemes)
 library(gghighlight)
-library(gganimate)
-library(png)
-library(gifski)
 library(viridis)
 
 # Load in USA Covid19 data
@@ -63,7 +60,7 @@ covid19_usa <-
 # Remove non-mainland states and regions (and D.C)
 covid19_usa <- 
   covid19_usa |> 
-  filter(! state %in% c('American Samoa', 'Puerto Rico', 'Guam', 'Virgin Islands', 'Northern Mariana Islands', 'District of COlumbia'))
+  filter(! state %in% c('American Samoa', 'Puerto Rico', 'Guam', 'Virgin Islands', 'Northern Mariana Islands', 'District of Columbia'))
 
 # Subset our data to a specified time frame (we will focus on the first 3 years of COVID19 only).
 covid19_usa <-
@@ -145,3 +142,4 @@ state_data <- state_data |>
 state_data$government_party <- as.factor(state_data$government_party)
 
 str(state_data)
+
