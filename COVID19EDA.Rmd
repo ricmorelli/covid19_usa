@@ -1,0 +1,838 @@
+---
+title: "Exploratory Data Analysis - COVID19 in the United States (2020-2023)"
+author: "Ricardo Morelli"
+date: "2024-12-08"
+output:
+  html_document: default
+  word_document: default
+  pdf_document: default
+---
+
+# Purpose Statement
+
+This paper aims to illustrate my approach to Exploratory Data Analysis (EDA), a process I use to systematically investigate ideas and develop understanding of a dataset. In conducting EDA, I use an iterative approach of:
+
+1. Generating questions about the data.
+2. Using data transformation and visualisation to search for possible answers.
+3. Leveraging any learnings to refine or generate new questions.
+
+This piece will highlight my personal approach and methodology when working with a new dataset. As such, I will not be applying advanced statistical concepts or modelling in this paper. Instead, I have opted to use basic concepts and provide running commentary to focus on demonstrating my thought process and decision making.
+
+
+```{r Setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, eval = TRUE, message = FALSE, warning = FALSE, tidy = TRUE)
+library(COVID19)
+library(tidyverse)
+library(snakecase)
+library(scales)
+library(ggrepel)
+library(ggthemes)
+library(viridis)
+```
+
+# Data Import & Variable Analysis
+
+```{r Data Import, results = 'hide'}
+# I will be getting my data from covid19datahub.io courtesy of the 'COVID19' R package:
+
+# Guidotti, E., Ardia, D., (2020), "COVID-19 Data Hub", Journal of Open Source Software 5(51):2376, doi: 10.21105/joss.02376
+
+# Load in USA COVID19 data
+covid19_usa <- covid19("United States", level = 2)
+```
+
+```{r Variable Exploration, eval = TRUE}
+# Take a view of the variables in our dataset
+glimpse(covid19_usa)
+```
+
+**Cumulative numeric variables**: confirmed, deaths, recovered...
+  
+- In isolation, these could be useful for creating dashboard type metrics or evaluating progress at a certain point in time. For my purposes, I will likely use these as inputs to create new variables.
+
+- It is possible to 'de-cum' these variables to get daily values of 'new confirmed', 'new deaths' etc. This would be useful if I choose to analyse these variables across different points in time.
+
+**Non-cumulative Numeric variables**: hosp, icu, vent
+
+- These variables could be immediately useful as they are non-cumulative and can be better used in a time series. However, these absolute values also refer to a respective state, so it may be more useful to transform them into proportions of population to make them comparable across states.
+
+**Population**: This will be extremely useful as a denominator to create proportions using other numeric variables. Note that this variable is in reference to a given state, not the population of the entire US.
+
+**Policy Measure Variables**: school_closing, workplace_closing, stay_home_restrictions...
+
+- **NOTE**: Although these variables are described using integers (0, 1, 2 ...etc), they should be treated as factors. I will fix this in the next section.
+
+- My immediate concern is that the levels are likely not consistent in meaning across regions. For example, A level 2 'facial_coverings' policy in New York may not mean the same thing as it does in Florida. For this reason alone, I'm not comfortable using these variables unless comparing regions under the same local or state government policy.
+
+**Government Response Indices**: stringency_index, economic_support_index...
+
+- I am more comfortable using these Oxford response trackers to make comparisons across countries or regions. Being calculated as an index rather than grouped into discrete levels gives the assurance that small differences between regions will be more accurately described.
+
+**Administrative Areas**: state, region...
+
+- Likely the single most important set of variables. Most of the data I use will be grouped by State.
+
+- There do not appear to be any major transformations required, aside from renaming the variable itself.
+
+**Coordinates & ISO codes**:
+
+- Global standard measures that could be very useful for any mapping visualisations or labels.
+
+
+# Data Cleaning & Subsetting
+
+```{r Cleaning}
+# Clean up column names
+names(covid19_usa) <- to_snake_case(names(covid19_usa))
+
+# Rename ambiguous columns
+covid19_usa <- 
+  covid19_usa |>
+  rename(
+    country = administrative_area_level_1,
+    state = administrative_area_level_2
+  ) 
+
+# Remove non-mainland states/regions (and D.C)
+covid19_usa <- 
+  covid19_usa |> 
+  filter(! state %in% c('American Samoa', 'Puerto Rico', 'Guam', 'Virgin Islands', 'Northern Mariana Islands', 'District of Columbia'))
+
+# Subset data (I will focus on the first 3 years of COVID19 only).
+covid19_usa <-
+  covid19_usa |> 
+  filter(date < '2023-01-01')
+
+# Transform numerical variables to factors where appropriate:
+fct_cols <- c('school_closing', 'workplace_closing', 'cancel_events', 'gatherings_restrictions',
+              'transport_closing', 'stay_home_restrictions', 'internal_movement_restrictions',
+              'international_movement_restrictions', 'information_campaigns', 'testing_policy',
+              'contact_tracing', 'facial_coverings', 'vaccination_policy', 'elderly_people_protection')
+
+covid19_usa <- 
+  covid19_usa |> 
+  mutate_at(fct_cols, factor)
+```
+
+```{r Create State_Data df}
+# Create a new data frame to reference data not included in the COVID19 package.
+state_data <- tibble::tribble(
+  ~state,          ~abbreviation,     ~government_party,    ~area_kmsq,
+  "Alabama",       "AL",              "Republican",         "135767",
+  "Alaska",        "AK",              "Republican",         "1723337",
+  "Arizona",       "AZ",              "Democratic",         "295234",
+  "Arkansas",      "AR",              "Republican",         "137732",
+  "California",    "CA",              "Democratic",         "423967",
+  "Colorado",      "CO",              "Democratic",         "269601",
+  "Connecticut",   "CT",              "Democratic",         "14357",
+  "Delaware",      "DE",              "Democratic",         "6446",
+  "Florida",       "FL",              "Republican",         "170312",
+  "Georgia",       "GA",              "Democratic",         "153910",
+  "Hawaii",        "HI",              "Democratic",         "28313",
+  "Idaho",         "ID",              "Republican",         "216443",
+  "Illinois",      "IL",              "Democratic",         "149995",
+  "Indiana",       "IN",              "Republican",         "94326",
+  "Iowa",          "IA",              "Republican",         "145746",
+  "Kansas",        "KS",              "Republican",         "213100",
+  "Kentucky",      "KY",              "Republican",         "104656",
+  "Louisiana",     "LA",              "Republican",         "135659",
+  "Maine",         "ME",              "Democratic",         "91633",
+  "Maryland",      "MD",              "Democratic",         "32131",
+  "Massachusetts", "MA",              "Democratic",         "27336",
+  "Michigan",      "MI",              "Democratic",         "250487",
+  "Minnesota",     "MN",              "Democratic",         "225163",
+  "Mississippi",   "MS",              "Republican",         "125438",
+  "Missouri",      "MO",              "Republican",         "180540",
+  "Montana",       "MT",              "Republican",         "380831",
+  "Nebraska",      "NE",              "Republican",         "200330",
+  "Nevada",        "NV",              "Democratic",         "286380",
+  "New Hampshire", "NH",              "Democratic",         "24214",
+  "New Jersey",    "NJ",              "Democratic",         "22591",
+  "New Mexico",    "NM",              "Democratic",         "314917",
+  "New York",      "NY",              "Democratic",         "141297",
+  "North Carolina","NC",              "Republican",         "139391",
+  "North Dakota",  "ND",              "Republican",         "183108",
+  "Ohio",          "OH",              "Republican",         "116098",
+  "Oklahoma",      "OK",              "Republican",         "181037",
+  "Oregon",        "OR",              "Democratic",         "254799",
+  "Pennsylvania",  "PA",              "Democratic",         "119280",
+  "Rhode Island",  "RI",              "Democratic",         "4001",
+  "South Carolina","SC",              "Republican",         "82933",
+  "South Dakota",  "SD",              "Republican",         "199729",
+  "Tennessee",     "TN",              "Republican",         "109153",
+  "Texas",         "TX",              "Republican",         "695662",
+  "Utah",          "UT",              "Republican",         "219882",
+  "Vermont",       "VT",              "Democratic",         "24906",
+  "Virginia",      "VA",              "Democratic",         "110787",
+  "Washington",    "WA",              "Democratic",         "184661",
+  "West Virginia", "WV",              "Republican",         "62756",
+  "Wisconsin",     "WI",              "Democratic",         "169635",
+  "Wyoming",       "WY",              "Republican",         "253335"
+)
+
+# Transform 'area_kmsq' to a numeric variable
+state_data <- state_data |> 
+  mutate(
+    area_kmsq = as.numeric(area_kmsq)
+    )
+
+# Transform 'government_party' to a factor
+state_data$government_party <- as.factor(state_data$government_party)
+```
+
+
+# A Starting Point - Mortality
+The base dataset contains an abundance of cumulative and absolute values. I am hesitant to use these in their current form, as they are not comparable between states of varying populations. I will need to create new variables that are proportional to a state's population to make them useful in comparisons.
+
+This part of my exploration will focus on on **mortality** (proportion of deaths to confirmed cases). I will typically express mortality as a percentage (i.e. the % of confirmed cases that resulted in death).
+
+Before viewing any data, it is important to set out my goals and any expectations I may have. This helps add structure to my analysis and maintain accountability for any cognitive biases.
+
+**What do I want to know?**
+
+1. What is the relationship between population and mortality?
+2. Did some states observe disproportionately high or low mortality rates relative to their population?
+
+**What are my preconceptions?**
+
+- It seems reasonable that states with a larger population will, on average, suffer higher rates of mortality. Given COVID is an airborne virus, a more populated state allows for more avenues for transmission.
+
+```{r Population x Mortality 1}
+# Create a scatterplot: population vs mortality rate grouped by US State
+covid19_usa |>
+  left_join(state_data, join_by(state)) |> 
+  group_by(state, abbreviation) |> 
+  mutate(
+    mortality = (deaths / confirmed),
+  ) |> 
+  summarise(
+    population = max(population, na.rm = TRUE),
+    deaths = max(deaths, na.rm = TRUE),
+    mortality = mean(mortality, na.rm = TRUE),
+    .groups = 'drop'
+  ) |> 
+  ggplot(aes(x = population, y = mortality, size = deaths, label = abbreviation, colour = state)) +
+  geom_point(alpha = 0.3) +
+  geom_label_repel(size = 3, max.overlaps = 3, show.legend = FALSE) +
+  scale_x_continuous(labels = comma) +
+  scale_y_continuous(labels = scales::percent) +
+  scale_size_continuous(labels = scales::unit_format(unit = "K", scale = 1e-3)) +
+  guides(colour = "none") +
+  labs(
+    title = "COVID19 Mortality Rate by US State",
+    caption = "Data from covid19datahub.io",
+    x = "Population",
+    y = "Mortality Rate",
+    size = "Deaths"
+  ) +
+  theme(
+    plot.title = element_text(colour = "black"),
+    plot.subtitle = element_text(colour = "red"),
+    panel.border = element_rect(color = "black", fill = NA)
+  )
+```
+
+There are two clusters of results that are of immediate interest, I will highlight them on the plot:
+
+```{r Population x Mortality 2}
+# Define the clusters to highlight
+northeast_state_cluster <- c('CT', 'NJ', 'NY', 'MA', 'MI', 'PA')
+largest_pop_cluster <- c('FL', 'TX', 'CA')
+
+# Highlight these clusters on the plot
+covid19_usa |>
+  left_join(state_data, join_by(state)) |> 
+  group_by(state, abbreviation) |> 
+  mutate(
+    mortality = (deaths / confirmed),
+  ) |> 
+  summarise(
+    population = max(population, na.rm = TRUE),
+    deaths = max(deaths, na.rm = TRUE),
+    mortality = mean(mortality, na.rm = TRUE),
+    .groups = 'drop'
+  ) |> 
+  ggplot(aes(x = population, y = mortality, size = deaths,
+             colour = if_else(abbreviation %in% c(northeast_state_cluster, largest_pop_cluster), state, ''), 
+             label = if_else(abbreviation %in% c(northeast_state_cluster, largest_pop_cluster), abbreviation, ''))) +
+  geom_point(alpha = 0.3) +
+  geom_label_repel(size = 3, max.overlaps = 5, show.legend = FALSE) +
+  scale_x_continuous(labels = comma) +
+  scale_y_continuous(labels = scales::percent) +
+  scale_size_continuous(labels = scales::unit_format(unit = "K", scale = 1e-3)) +
+  guides(colour = "none") +
+  labs(
+    title = "COVID19 Mortality Rate by US State",
+    caption = "Data from covid19datahub.io",
+    x = "Population",
+    y = "Mortality Rate",
+    size = "Deaths"
+  ) +
+  theme(
+    plot.title = element_text(colour = "black"),
+    plot.subtitle = element_text(colour = "red"),
+    panel.border = element_rect(color = "black", fill = NA)
+  )
+```
+
+**Cluster 1: FL, TX & CA**
+
+Relative to my expectations, these more populated states appear to have mortality rates are in line with the average. I note that these are the 3 most populous states in the country, which I initially expected may result in above average mortality. Could their ability to curb mortality be a result of better government support? Policy measures? Vaccine access? Or something far simpler...?
+
+**Cluster 2: The Northeastern States**
+
+Although not extreme outliers relative to the rest of the data, it is of interest that all states in this group are from the same geographical region. What is it about the northeast that caused above average mortality rates?
+
+It might seem reasonable to investigate these clusters independently, but what if they are more closely related than I might think? In my initial assessment of the data set and its variables, I highlighted my aversion to using cumulative or absolute values in my analysis, as they limit the ability to compare data across regions. In using population as a metric on its own I have gone against my own thinking. I need to transform population to a new metric that can be used in state-to-state comparison: 'population density':
+
+**Population density** = (population / area_kmsq) , expressed as 'people per square km'
+
+```{r Population density x Mortality}
+# Create a scatterplot: population density vs mortality rate grouped by US State
+
+# The COVID19 package does not contain land area data, so I need to join to our standard state_data data frame that contains the land area in km(sq) for each state.
+
+covid19_usa |>
+  left_join(state_data, join_by(state)) |> 
+  group_by(state, abbreviation) |> 
+  mutate(
+    mortality = (deaths / confirmed),
+    pop_density = (population / area_kmsq)
+  ) |> 
+  summarise(
+    deaths = max(deaths, na.rm = TRUE),
+    mortality = mean(mortality, na.rm = TRUE),
+    pop_density = mean(pop_density),
+    .groups = 'drop'
+  ) |> 
+  ggplot(aes(x = pop_density, y = mortality, size = deaths, label = abbreviation, colour = state)) +
+  geom_point(alpha = 0.3) +
+  geom_label_repel(size = 3, max.overlaps = 5, show.legend = FALSE) +
+  scale_x_continuous(labels = comma) +
+  scale_y_continuous(labels = scales::percent) +
+  scale_size_continuous(labels = scales::unit_format(unit = "K", scale = 1e-3)) +
+  guides(colour = "none") +
+  labs(
+    title = "COVID19 Mortality Rate by US State",
+    subtitle = "More densely populated states observed higher mortality rates on average",
+    caption = "Data from covid19datahub.io",
+    x = "Population Density (people per sq. km)",
+    y = "Mortality Rate",
+    size = "Deaths"
+  ) +
+  theme(
+    plot.title = element_text(colour = "black"),
+    plot.subtitle = element_text(colour = "red"),
+    panel.border = element_rect(color = "black", fill = NA)
+  )
+```
+
+The fit between these two variables is much better than when I used population alone. Theoretically, this makes sense; the more people in any given space, the greater the likelihood that the virus will spread, and as a result the chance of mutation into a more deadly variant also increases.
+
+I have briefly explored the concept of mortality rate and some of the factors that may lead to variation in our observations. It is important to note that in my analysis so far, I have looked at averages of a 3-year time period (2020-2023). This analysis is static in nature, and does not explore how mortality changes over time. 
+
+Coronavirus is a rapidly changing phenomenon. From mutations in the virus itself, to the onset of available vaccines, no aspect of this pandemic has ever been static. In the next section, I will focus on how mortality rate changes **over time**.
+
+# Mortality and the Passage of Time
+
+I'm interested in learning about how mortality rate changes over time, but I need to take note of some important points:
+
+1. Viruses take time to spread, patient zero cannot pass the virus to 100,000 others in one day, transmission rates increase over time.
+2. Initial public reaction to COVID19 was very cautious and risk-averse. In the early parts of 2020, knowledge of the virus and its impact were not fully known. As a result, many countries enforced strict public health measures to reduce transmission.
+
+Given these factors, the volume of data is not spread evenly across the timeline, with many days in early 2020 containing NIL observations for some variables. This leads to sample size issues: Take a look at the mortality rates for some of the days in early 2020:
+
+```{r Small sample size example}
+covid19_usa |> 
+  group_by(date) |> 
+  mutate(mortality = (deaths / confirmed)) |> 
+  select(deaths, confirmed, mortality) |> 
+  arrange(desc(mortality))
+```
+
+To overcome this and reduce extreme values in periods where sample size is low, I will bin our time series into periods. I will be split the timeline into (e.g. months) and take an average value of any given variable for that period.
+
+**What do I want to know?**
+
+1. States in the northeast region observed the highest mortality rates in the country, was this always the case?
+
+2. Were there any specific periods in time where mortality trended up or down across all states?
+
+**What are my preconceptions?**
+
+1. I expect that mortality will trend down over time. As the population develops layers of immunity (natural & vaccine), the marginal threat of each new case decreases.
+
+2. I anticipate mortality to eventually reach an equilibrium level. This relies on the below assumptions being (mostly) true:
+ - Almost everyone will contract COVID19 at least once, those who survive will also survive subsequent infections.
+ - Those that want to be vaccinated, will be.
+
+
+**NOTE:** Sometimes when conducting exploratory data analysis, I need to generate a visual that I know will be messy and/or useless for end-user consumption. In this case, I'm going to draw 50 line graphs on one plane. This will not look pretty, but it will serve its purpose in telling me what's occurring at a high level, and likely reveal any outliers.
+
+
+```{r Mortality over time geom_line}
+# Create a line plot: mortality rate over time for each US state
+covid19_usa |>
+  left_join(state_data, join_by(state)) |> 
+  group_by(month = lubridate::floor_date(date, "month"), state) |> 
+  mutate(
+    mortality = deaths / confirmed
+  ) |> 
+  summarise(
+    deaths = max(deaths),
+    mortality = mean(mortality, na.rm = TRUE),
+    .groups = 'drop'
+  ) |> 
+  ggplot(aes(x = month, y = mortality, group = state, color = state)) +
+  geom_line(size = 0.7, show.legend = FALSE) +
+  scale_y_continuous(labels = scales::percent) +
+  labs(
+    title = "COVID19 Mortality Rate by US State",
+    caption = "Data from covid19datahub.io",
+    y = "Mortality Rate"
+  ) +
+  theme(
+    axis.title.x = element_blank(),
+    plot.title = element_text(colour = "black"),
+    plot.subtitle = element_text(colour = "red"),
+    panel.border = element_rect(color = "black", fill = NA),
+    legend.position = c(0.85, 0.8),
+    legend.title = element_blank()
+  )
+```
+
+As expected, the plot messy and entirely unfit for public consumption (but still very useful for me right now). I can observe a clear downward trend, with the variation in observations between different states also decreasing over time. A notable point for me is the period in late 2021, where it appears every state observed a sharp decrease in mortality. What happened here?
+
+Before I move on to explore this, I'd like to take a closer look at the Northeastern states, but adding labels to this already messy plot seems ill advised. I need to find another visualisation type to better convey this information:
+
+```{r Mortality over time geom_tile}
+# Create a tile visual: mortality rate over time for each US state
+covid19_usa |>
+  group_by(month = lubridate::floor_date(date, "month"),state) |> 
+  mutate(
+    mortality = deaths / confirmed
+  ) |> 
+  summarise(
+    mean_mortality = mean(mortality, na.rm = TRUE),
+    .groups = 'drop'
+  ) |>
+  ggplot(aes(x = month, y = reorder(state, desc(state)), fill=mean_mortality)) +
+  geom_tile() +
+  scale_fill_viridis_c(labels = scales::label_percent()) +
+  labs(
+    title = "COVID19 Mortality Rate by US State",
+    subtitle = "Visualising the change in Mortality Rate in each US state",
+    caption = "Data from covid19datahub.io",
+    fill = "Mortality Rate"
+  ) +
+  theme(
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank(),
+    plot.title = element_text(colour = "black"),
+    plot.subtitle = element_text(colour = "red"),
+    panel.border = element_rect(color = "black", fill = NA)
+  )
+```
+
+This looks better, I can immediately see a few things:
+
+- The northeastern cluster of states all observed their above average mortality in 2020. 
+- From 2021 onwards,there is a remarkable absence of extreme values; all states observed a stable decrease in mortality from this point.
+
+So, what happened toward the end of 2021? Why did all states see a (relative) steep fall in mortality rate? I will start by looking at the most obvious variable... vaccines: and their relatiobship with mortality.
+
+# Vaccination and its Impact on Mortality
+
+Before I look at the relationship between vaccination and mortality, it is important to define how I will measure vaccination. The data set contains a 'people_fully_vaccinated' variable defined as: "Cumulative number of people who received all doses prescribed by the vaccination protocol". I envision some consistency issues when using this variable to compare between different geopolitical areas (the number of doses required to be 'fully vaccinated' may vary between regions). To overcome this, I will create a more standardised variable of 'average vaccine doses per person' by taking the cumulative sum of vaccine doses administered, divided by population.
+
+**Average vaccine doses per person** = (vaccines / population)
+
+One more piece of admin regarding timelines: Given the first vaccine in the US was administered in December 2020, I will subset the time frame for this part of the analysis to include 2021-2023 only. I only want to focus on the variability in mortality that can possibly be explained by vaccination, so the pre-vaccine period will not be observed.
+
+**What do I want to know?**
+
+1. How strong is the relationship between vaccination and mortality, is there a point where we start to observe diminishing returns?
+2. If vaccines were widely available from early 2021, why might the sharp fall in mortality have occured almost 12 months later? Is there a chance this was not vaccine related?
+
+**What are my preconceptions?**
+
+1. I anticipate to find a mildly negative relationship between vaccination and mortality. The reason I say mildly is because there are far too many other factors I have not controlled for, and some that I cannot control.
+2. It is certainly possible that I will observe some states exhibit both high mortality and high vaccination. This could be a result of causational factors, where because mortality is already high in a certain area, more people go out to get vaccinated.
+
+```{r Vaccine doses x Mortality}
+# Create a line plot: average vaccine doses vs mortality rate for each US state
+covid19_usa |> 
+  filter(date > '2021-01-01') |> 
+  group_by(month = lubridate::floor_date(date, "month"), state) |> 
+  mutate(
+    mortality = (deaths / confirmed),
+    vaccine_doses_pp = (vaccines / population)
+  ) |> 
+  summarise(,
+    mortality = mean(mortality, na.rm = TRUE),
+    vaccine_doses_pp = mean(vaccine_doses_pp, na.rm = TRUE),
+    .groups = 'drop'
+  ) |> 
+  ggplot(aes(x = vaccine_doses_pp, y = mortality, group = state, color = state)) +
+  geom_line(xintercept = 0.7) +
+  scale_x_continuous(breaks = seq(0, 3, by = 0.5)) +
+  scale_y_continuous(labels = scales::percent) +
+  labs(
+    title = "Relationship between vaccine doses and COVID19 mortality rate in the US",
+    subtitle = "More vaccine doses per person resulted in a lower mortality rate on average",
+    caption = "Data from covid19datahub.io",
+    x = "Average Vaccine doses per person",
+    y = "Mortality Rate"
+  ) +
+  theme(
+    plot.title = element_text(colour = "black"),
+    plot.subtitle = element_text(colour = "red"),
+    panel.border = element_rect(color = "black", fill = NA),
+    legend.position = "none"
+  )
+```
+
+I didn't learn a whole lot more here. In fact, I've thought a little more about our measure of 'average doses per person' and it may not be as suitable as initially thought. For example, Take 3 people and 3 vaccine doses:
+
+- Scenario 1: Each person receives (1) dose.
+- Scenario 2: One person receives (2) doses, another receives (1) and the last person receives (0).
+
+In both these scenarios, the average doses per person are equal (1), however I cannot know if the impact on mortality will be equal in reality. Acknowledging this potential flaw, I will revert to the 'people_fully_vaccinated' variable, and hope that it holds up when comparing across states within the US only.
+
+```{r Prop_full_vax x Mortality}
+# Create a line plot: population vaccination percentage vs mortality rate.
+covid19_usa |> 
+  filter(date > '2021-01-01') |> 
+  group_by(month = lubridate::floor_date(date, "month"), state) |> 
+  mutate(
+    mortality = (deaths / confirmed),
+    prop_fully_vax = (people_fully_vaccinated / population)
+  ) |> 
+  summarise(,
+            mortality = mean(mortality, na.rm = TRUE),
+            prop_fully_vax = mean(prop_fully_vax, na.rm = TRUE),
+            .groups = 'drop'
+  ) |> 
+  ggplot(aes(x = prop_fully_vax, y = mortality, group = state, color = state)) +
+  geom_line() +
+  geom_vline(xintercept = c(0.5, 0.6, 0.7, 0.8), linetype = 4) +
+  scale_x_continuous(breaks = seq(0, 1, by = 0.1)) +
+  scale_y_continuous(labels = scales::percent) +
+  labs(
+    title = "Tracking how COVID19 Mortality changes as a Population becomes Fully Vaccinated",
+    subtitle = "Reaching certain vaccination thresholds appears to significantly reduce mortality rate",
+    caption = "Data from covid19datahub.io",
+    x = "Proportion of Population Fully Vaccinated",
+    y = "Mortality Rate"
+  ) +
+  theme(
+    plot.title = element_text(colour = "black"),
+    plot.subtitle = element_text(colour = "red"),
+    panel.border = element_rect(color = "black", fill = NA),
+    legend.position = "none"
+  )
+```
+
+Here I observe a significant difference in the rate of change (gradient) for mortality between the bands I have created. Unfortunately, until I quantify a trend it is nothing more than speculation. I will take this opportunity to move away from this visual; outside of trying to navigate between the 50 squiggly lines on this chart, its not entirely clear how the rate of change increases(decreases) between vaccination brackets. I'd like to compare the differences in average mortality when moving between the 50-60%, 60-70% and 70-80% brackets.
+
+**The plan:** Determine the mortality for each state at the 0.5, 0.6, 0.7 and 0.8 (noting that not all states will reach each threshold). I will then join our 4 new data frames and calculate the average % change in mortality observed between each threshold.
+
+```{r Percent change in mortality between vaccination thresholds}
+# Calculate the mortality rate at the point in time that each state reached 50% full vaccination.
+vax_50_60 <- covid19_usa |> 
+  group_by(state) |> 
+  mutate(
+    mortality = (deaths / confirmed),
+    prop_fully_vax = (people_fully_vaccinated / population)
+  ) |> 
+  filter(max(prop_fully_vax, na.rm = TRUE) >= 0.6) |>
+  filter(min(prop_fully_vax, na.rm = TRUE) > 0) |> 
+  filter(prop_fully_vax >= 0.5) |> 
+  summarise(
+    mortality_50 = mortality,
+    prop_fully_vax_50 = prop_fully_vax
+  ) |> 
+  top_n(-1, prop_fully_vax_50)
+
+# Repeat for the 60% threshold.
+vax_60_70 <- covid19_usa |> 
+  group_by(state) |> 
+  mutate(
+    mortality = (deaths / confirmed),
+    prop_fully_vax = (people_fully_vaccinated / population)
+  ) |> 
+  filter(max(prop_fully_vax, na.rm = TRUE) >= 0.7) |>
+  filter(min(prop_fully_vax, na.rm = TRUE) > 0) |> 
+  filter(prop_fully_vax >= 0.6) |> 
+  summarise(
+    mortality_60 = mortality,
+    prop_fully_vax_60 = prop_fully_vax
+  ) |> 
+  top_n(-1, prop_fully_vax_60)
+
+# Repeat for the 70% threshold.
+vax_70_80 <- covid19_usa |> 
+  group_by(state) |> 
+  mutate(
+    mortality = (deaths / confirmed),
+    prop_fully_vax = (people_fully_vaccinated / population)
+  ) |> 
+  filter(max(prop_fully_vax, na.rm = TRUE) >= 0.8) |>
+  filter(min(prop_fully_vax, na.rm = TRUE) > 0) |> 
+  filter(prop_fully_vax >= 0.7) |> 
+  summarise(
+    mortality_70 = mortality,
+    prop_fully_vax_70 = prop_fully_vax
+  ) |> 
+  top_n(-1, prop_fully_vax_70)
+
+# Repeat for the 80% threshold.
+vax_80 <- covid19_usa |> 
+  group_by(state) |> 
+  mutate(
+    mortality = (deaths / confirmed),
+    prop_fully_vax = (people_fully_vaccinated / population)
+  ) |> 
+  filter(max(prop_fully_vax, na.rm = TRUE) >= 0.8) |>
+  filter(min(prop_fully_vax, na.rm = TRUE) > 0) |> 
+  filter(prop_fully_vax >= 0.8) |> 
+  summarise(
+    mortality_80 = mortality,
+    prop_fully_vax_80 = prop_fully_vax
+  ) |> 
+  top_n(-1, prop_fully_vax_80)
+
+# Join all results together and calculate the average % change in mortality rate between each threshold.
+vax_all_bands <- vax_50_60 |> 
+  left_join(vax_60_70, join_by(state)) |> 
+  left_join(vax_70_80, join_by(state)) |> 
+  left_join(vax_80, join_by(state)) |> 
+  mutate(
+    perc_change_50_60 = (mortality_60 - mortality_50) / (mortality_50),
+    perc_change_60_70 = (mortality_70 - mortality_60) / (mortality_60),
+    perc_change_70_80 = (mortality_80 - mortality_70) / (mortality_70)
+  ) |> 
+  select(perc_change_50_60, perc_change_60_70, perc_change_70_80)
+```
+
+```{r Percent change in mortality between vaccination thresholds (RESULTS)}
+mean(vax_all_bands$perc_change_50_60, na.rm = TRUE)
+mean(vax_all_bands$perc_change_60_70, na.rm = TRUE)
+mean(vax_all_bands$perc_change_70_80, na.rm = TRUE)
+```
+
+
+I observe the following (relative) percent decreases in average mortality rate between each vaccination threshold:
+
+- 50% to 60% : -4.00%
+- 60% to 70% : -9.30%
+- 70% to 80% : -41.20%
+
+This is quite an extraordinary observation, the comparative rate of change between each bracket is fascinating. Given the relative plateau up to the ~50% fully vaccinated mark, it's very interesting to see mortality fall so steeply afterwards.
+Throughout the vaccine campaign here in Victoria, the Department of Health put heavy emphasis on the importance of reaching these vaccination thresholds, so it is pleasing to see that at there seems to be merit to the research, at least on an empirical level.
+
+In the last section, there are two aspects I'd like to explore:
+
+1. Previously, I used a messy visual to get an idea and contextualise some observations. How can I present these findings in a way that is fit for public consumption? I will look at how we can better communicate vaccination levels across each US state.
+2. The visual I created above also has an issue where it relates to 'time'. Any given point on the x axis represents many different snapshots in time. It may be useful to find a new visual that represents how long it took each state to reach any given threshold. This would be of far more interest to users who wish to know how quickly their state got vaccinated relative to the rest of the country.
+
+
+# A Colourful Finish
+
+In this final part, I will take the ideas generated about vaccination in the last chapter and look to create some interesting, user friendly visuals. I will start by taking the current (end of 2022) vaccination rate for each state and overlaying it on a map of the US.
+
+```{r USA Vaccination Map}
+# Calculate the current (31-Dec-2022) proportion of each state's population that is fully vaccinated.
+us_vax_by_state <- covid19_usa |> 
+  group_by(state) |> 
+  mutate(
+    prop_fully_vax = (people_fully_vaccinated / population)
+  ) |> 
+  summarise(
+    prop_fully_vax = max(prop_fully_vax, na.rm = TRUE)
+  )
+
+# Use the 'maps' package as the basis for creating the visual
+library(maps)
+
+# Load in US state border data
+us_map_data <- map_data('state') 
+names(us_map_data) <- to_snake_case(names(us_map_data))
+
+# Transform state titles to 'proper' form
+us_map_data <- us_map_data |> 
+  mutate(
+    region  = str_to_title(region) 
+  ) |> 
+  rename(
+    state = region)
+
+# Join new data frames to the existing state_data table
+us_map_all <- us_vax_by_state |> 
+  left_join(us_map_data, join_by(state)) |> 
+  left_join(state_data, join_by(state))
+
+# Create a Map visual displaying the current 'prop_fully_vax' for each US state (Alaska & Hawaii removed for visual purposes)
+us_vaccination_map <- us_map_all |> 
+  filter(!state %in% c('Alaska', 'Hawaii')) |> 
+  ggplot(aes(x = long, y = lat, group = state, fill = prop_fully_vax)) +
+  geom_polygon(color = "black", linewidth = 0.2) +
+  scale_fill_viridis_c(name = 'Prop. Full Vax') +
+  coord_fixed(1.3) +
+  labs(
+    title = "Proportion of Population Fully Vaccinated By State",
+    caption = "Data from covid19datahub.io"
+  ) +
+  theme(
+    axis.title.x = element_blank(), axis.text.x = element_blank(), axis.ticks.x = element_blank(),
+    axis.title.y = element_blank(), axis.text.y = element_blank(), axis.ticks.y = element_blank(),
+    plot.title = element_text(colour = "black"),
+    panel.background = element_blank()
+  )
+
+us_vaccination_map
+```
+
+This map looks pretty similar to something I've seen before... let's take a look at the 2020 election map:
+
+```{r USA Vaccination Map + 2020 Election Map}
+# Create a Map visual showing the results of the 2020 US election (Alaska & Hawaii removed for visual purposes)
+us_2020_election_map <- us_map_all |> 
+  filter(!state %in% c('Alaska', 'Hawaii')) |>
+  ggplot(aes(x = long, y = lat, group = state, fill = government_party)) +
+  geom_polygon(color = "black", linewidth = 0.2) +
+  scale_fill_manual(values = c(Republican = "#E81B23", Democratic = "#00AEF3")) +
+  coord_fixed(1.3) +
+  labs(
+    title = "2020 US Election Map"
+  ) +
+  theme(
+    axis.title.x = element_blank(), axis.text.x = element_blank(), axis.ticks.x = element_blank(),
+    axis.title.y = element_blank(), axis.text.y = element_blank(), axis.ticks.y = element_blank(),
+    plot.title = element_text(colour = "black"),
+    legend.title = element_blank(),
+    panel.background = element_blank()
+  )
+
+# Use patchwork to compare the maps:
+library(patchwork)
+(us_vaccination_map / us_2020_election_map)
+```
+
+Now I will address how I could better illustrate time where it relates to reaching vaccination thresholds. I will calculate how long it took each state to reach 80% full vaccination and explore the most engaging ways to visualise this information.
+
+```{r Race to 80 Vaccination geom_line}
+# Calculate each state's vaccination rate at each day from 2021 onwards (for those that reached 80%)
+vax_race_80 <- covid19_usa |> 
+  left_join(state_data, join_by(state)) |> 
+  group_by(state, abbreviation) |> 
+  mutate(
+    prop_fully_vax = (people_fully_vaccinated / population)
+  ) |> 
+  filter(max(prop_fully_vax, na.rm = TRUE) >= 0.8) |>
+  filter(min(prop_fully_vax, na.rm = TRUE) > 0) |> 
+  filter(prop_fully_vax <= 0.8) |> 
+  select(date, prop_fully_vax)
+
+# Determine the endpoints (date that each state reached 80%)
+data_ends_80 <- vax_race_80 |> 
+  summarise(
+    date_end = date,
+    prop_vax_end = prop_fully_vax
+  ) |> 
+  slice_max(prop_vax_end, n = 1, with_ties = FALSE)
+
+# Create a line plot: % Fully vaccinated over time, for states that reached 80%.
+vax_race_80 |> 
+  ggplot(aes(color = state, group = state, label = abbreviation)) +
+  geom_point(data = data_ends_80, aes(x = date_end, y = prop_vax_end)) +
+  geom_line(aes(x = date, y = prop_fully_vax)) +
+  geom_segment(data = data_ends_80 |> filter(!state %in% c('Rhode Island', 'Massachusetts')), aes(x = date_end, y = prop_vax_end, xend = date_end, yend = (prop_vax_end + 0.1)), linetype = 5) +
+  geom_segment(data = data_ends_80 |> filter(state %in% c('Rhode Island', 'Massachusetts')), aes(x = date_end, y = prop_vax_end, xend = date_end, yend = (prop_vax_end + 0.17)), linetype = 5) +
+  geom_label(data = data_ends_80 |> filter(!state %in% c('Rhode Island', 'Massachusetts')), aes(x = date_end, y = prop_vax_end + 0.1)) +
+  geom_label(data = data_ends_80 |> filter(state %in% c('Rhode Island', 'Massachusetts')), aes(x = date_end, y = prop_vax_end + 0.17)) +
+  geom_hline(yintercept = 0.8, linetype = 4) + 
+  scale_x_date(date_labels = "%b %y", date_breaks = "3 months") +
+  scale_y_continuous(
+    limits = c(0,1),breaks = seq(0, 1, by = 0.1),
+    labels = scales::percent,
+  ) +
+  labs(
+    title = "The Great (Vaccination) Race",
+    subtitle = "Visualising the US states fastest to reach 80% vaccination rate",
+    caption = "Data from covid19datahub.io",
+    y = "% Fully Vaccinated",
+    color = "State"
+  ) +
+  theme(axis.title.x = element_blank(),
+        plot.title = element_text(colour = "black"),
+        plot.subtitle = element_text(colour = "red"),
+        panel.border = element_rect(color = "black", fill = NA),
+        legend.position = "none"
+  )
+
+```
+
+This visual works well due the the small number of states (7) that reached the 80% vaccination threshold. If I wanted to look at a lower threshold, it may be best to use a different visual to prevent over plotting. Take the 70% vaccination threshold, which 20 states reached before 2023:
+
+```{r Race to 70 Vaccination geom_col}
+# Calculate each state's vaccination rate at each day from 2021 onwards (for those that reached 70%)
+vax_race_70 <- covid19_usa |> 
+  left_join(state_data, join_by(state)) |> 
+  group_by(state, abbreviation) |> 
+  mutate(
+    prop_fully_vax = (people_fully_vaccinated / population)
+  ) |> 
+  filter(max(prop_fully_vax, na.rm = TRUE) >= 0.7) |>
+  filter(min(prop_fully_vax, na.rm = TRUE) > 0) |> 
+  filter(prop_fully_vax <= 0.7) |> 
+  select(date, prop_fully_vax)
+
+# Determine the start points (date of first vaccination dose in each state)
+data_starts_70 <- vax_race_70 |> 
+  summarise(
+    date_start = date,
+    state,
+    prop_vax_start = prop_fully_vax
+  ) |>
+  slice_min(prop_vax_start, n = 1, with_ties = FALSE)
+
+# Determine the endpoints (date that each state reached 70%)
+data_ends_70 <- vax_race_70 |> 
+  summarise(
+    date_end = date,
+    prop_vax_end = prop_fully_vax
+  ) |> 
+  slice_max(prop_vax_end, n = 1, with_ties = FALSE)
+
+# Merge start and endpoints together
+days_to_70 <- merge(data_starts_70,data_ends_70,by=c("state")) |> 
+  mutate(
+    days = as.numeric(date_end - date_start)
+  ) |> 
+  arrange(days)
+
+# Create a column chart: Days each state took to reach 70% full vaccination
+days_to_70 |>
+  ggplot(aes(x = days, y = fct_reorder(as.factor(state), -days), fill = days, label = days)) +
+  geom_col(width = 0.7, color = "black", show.legend = FALSE) +
+  geom_text(aes(label = days), hjust = -0.2) +
+  scale_fill_gradient(low = "lightblue", high = "darkblue", na.value = NA) +
+  scale_x_continuous() +
+  scale_y_discrete() +
+  labs(
+    title = "Days to reach 70% full vaccination by US State",
+    caption = "Data from covid19datahub.io",
+    x = "Days"
+  ) +
+  theme(
+    axis.title.y = element_blank(),
+    plot.title = element_text(colour = "black"),
+    plot.subtitle = element_text(colour = "red"),
+    panel.border = element_rect(color = "black", fill = NA),
+    panel.background = element_blank(),
+    legend.title = element_blank()
+  )
+```
+
+By using a column chart, I am able to include more data in a similar sized space compared to the line plot. This  comes at the expense of being able to see how each state tracked in the time period leading up to reaching 70%. When deciding which visual to use, I always need to consider multiple aspects in evaluating what is most useful for our audience.
