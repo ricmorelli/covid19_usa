@@ -10,13 +10,13 @@ output:
 
 # Purpose Statement
 
-This paper aims to illustrate my approach to Exploratory Data Analysis (EDA), a process I use to systematically investigate ideas and develop understanding of a dataset. In conducting EDA, I use an iterative approach of:
+This paper outlines my approach to Exploratory Data Analysis (EDA), a systematic process I use to investigate ideas and develop understanding of a dataset. My methodology follows an iterative approach:
 
 1. Generating questions about the data.
 2. Using data transformation and visualisation to search for possible answers.
 3. Leveraging any learnings to refine or generate new questions.
 
-This piece will highlight my personal approach and methodology when working with a new dataset. As such, I will not be applying advanced statistical concepts or modelling in this paper. Instead, I have opted to use basic concepts and provide running commentary to focus on demonstrating my thought process and decision making.
+Rather than delving into advanced statistical concepts or modelling, this paper focuses on my personal approach and provides running commentary to highlight my thought process and decision-making approach when analysing a new dataset. In this example I will look at COVID19 in the United States, using data from covid19datahub.io courtesy of the 'COVID19' R package:
 
 
 ```{r Setup, include=FALSE}
@@ -33,7 +33,7 @@ library(viridis)
 # Data Import & Variable Analysis
 
 ```{r Data Import, results = 'hide'}
-# I will be getting my data from covid19datahub.io courtesy of the 'COVID19' R package:
+# Data from covid19datahub.io
 
 # Guidotti, E., Ardia, D., (2020), "COVID-19 Data Hub", Journal of Open Source Software 5(51):2376, doi: 10.21105/joss.02376
 
@@ -46,37 +46,37 @@ covid19_usa <- covid19("United States", level = 2)
 glimpse(covid19_usa)
 ```
 
-**Cumulative numeric variables**: confirmed, deaths, recovered...
+**Cumulative Numeric Variables**: confirmed, deaths, recovered...
   
-- In isolation, these could be useful for creating dashboard type metrics or evaluating progress at a certain point in time. For my purposes, I will likely use these as inputs to create new variables.
+- In isolation, these metrics are useful in creating dashboards or evaluating progress at a certain point in time. For my purposes, I will likely use these as inputs to create new variables.
 
-- It is possible to 'de-cum' these variables to get daily values of 'new confirmed', 'new deaths' etc. This would be useful if I choose to analyse these variables across different points in time.
+- Additionally, it is possible to 'de-cum' these variables to calculate daily values such as 'new confirmed cases' or 'new deaths'. This approach will be useful if I choose to analyse trends across different points in time.
 
-**Non-cumulative Numeric variables**: hosp, icu, vent
+**Non-Cumulative Numeric Variables**: hosp, icu, vent
 
-- These variables could be immediately useful as they are non-cumulative and can be better used in a time series. However, these absolute values also refer to a respective state, so it may be more useful to transform them into proportions of population to make them comparable across states.
+- These variables are immediately useful as they are non-cumulative and well suited for time series analysis. However, since these absolute values pertain to specific states, it may be more useful to transform them into proportions of the population, enabling comparisons across states.
 
-**Population**: This will be extremely useful as a denominator to create proportions using other numeric variables. Note that this variable is in reference to a given state, not the population of the entire US.
+**Population**: This variable is extremely useful as a denominator for calculating proportions with other numeric variables. It represents the population of a given state, not the entire United States (US).
 
 **Policy Measure Variables**: school_closing, workplace_closing, stay_home_restrictions...
 
-- **NOTE**: Although these variables are described using integers (0, 1, 2 ...etc), they should be treated as factors. I will fix this in the next section.
+- Although these variables are represented as integers (0, 1, 2 ...etc), they should be treated as factors. This will be addressed in the next section.
 
-- My immediate concern is that the levels are likely not consistent in meaning across regions. For example, A level 2 'facial_coverings' policy in New York may not mean the same thing as it does in Florida. For this reason alone, I'm not comfortable using these variables unless comparing regions under the same local or state government policy.
+- An immediate concern is the potential inconsistency in meaning across regions. For example, a level 2 'facial coverings' policy in New York may differ significantly from the same level in Florida. For this reason, I am hesitant to rely on these variables unless comparing regions governed by the same local or state policies.
 
 **Government Response Indices**: stringency_index, economic_support_index...
 
-- I am more comfortable using these Oxford response trackers to make comparisons across countries or regions. Being calculated as an index rather than grouped into discrete levels gives the assurance that small differences between regions will be more accurately described.
+- These Oxford response trackers provide a reliable basis for comparing countries or regions. Since these are calculated as an index rather than grouped into discrete levels, they offer greater assurance of capturing small differences between regions more accurately.
 
 **Administrative Areas**: state, region...
 
-- Likely the single most important set of variables. Most of the data I use will be grouped by State.
+- These are likely the most important set of variables, as most of the data will be grouped by State.
 
-- There do not appear to be any major transformations required, aside from renaming the variable itself.
+- No major transformation is required aside from renaming the variable for clarity.
 
 **Coordinates & ISO codes**:
 
-- Global standard measures that could be very useful for any mapping visualisations or labels.
+- These global standard measures are useful for any mapping visualisations.
 
 
 # Data Cleaning & Subsetting
@@ -182,20 +182,20 @@ state_data$government_party <- as.factor(state_data$government_party)
 
 
 # A Starting Point - Mortality
-The base dataset contains an abundance of cumulative and absolute values. I am hesitant to use these in their current form, as they are not comparable between states of varying populations. I will need to create new variables that are proportional to a state's population to make them useful in comparisons.
+The base dataset includes numerous cumulative and absolute values, which are not directly comparable across US states with differing population sizes.  To enable meaningful comparisons, I will derive new variables proportional to each state’s population.
 
-This part of my exploration will focus on on **mortality** (proportion of deaths to confirmed cases). I will typically express mortality as a percentage (i.e. the % of confirmed cases that resulted in death).
+This exploration focuses on mortality, defined as a proportion of deaths to confirmed cases, which I will express as a percentage (i.e. the percentage of confirmed cases resulting in death).
 
-Before viewing any data, it is important to set out my goals and any expectations I may have. This helps add structure to my analysis and maintain accountability for any cognitive biases.
+Before analysing the data, it is important to outline my goals and expectations. Doing so provides structure to my analysis and helps mitigate potential cognitive biases.
 
-**What do I want to know?**
+**What Do I Want to Know?**
 
-1. What is the relationship between population and mortality?
+1. How does population relate to mortality? 
 2. Did some states observe disproportionately high or low mortality rates relative to their population?
 
-**What are my preconceptions?**
+**What Are My Assumptions?**
 
-- It seems reasonable that states with a larger population will, on average, suffer higher rates of mortality. Given COVID is an airborne virus, a more populated state allows for more avenues for transmission.
+- States with larger populations are likely to experience higher  mortality rate on average. Since COVID is an airborne virus, higher population provides more opportunity for transmission.
 
 ```{r Population x Mortality 1}
 # Create a scatterplot: population vs mortality rate grouped by US State
@@ -232,7 +232,7 @@ covid19_usa |>
   )
 ```
 
-There are two clusters of results that are of immediate interest, I will highlight them on the plot:
+In the above chart, two clusters of results stand out as immediately interesting, I will highlight them on the plot:
 
 ```{r Population x Mortality 2}
 # Define the clusters to highlight
@@ -277,15 +277,17 @@ covid19_usa |>
 
 **Cluster 1: FL, TX & CA**
 
-Relative to my expectations, these more populated states appear to have mortality rates are in line with the average. I note that these are the 3 most populous states in the country, which I initially expected may result in above average mortality. Could their ability to curb mortality be a result of better government support? Policy measures? Vaccine access? Or something far simpler...?
+Relative to my expectations, the above plot illustrates that the more populated states have mortality rates in line with the average. I note these are the three most populous states in the country, which I initially expected may result in above average mortality. Could their ability to curb mortality be a result of better government support? Policy measures? Vaccine access? Or something far simpler?
 
 **Cluster 2: The Northeastern States**
 
-Although not extreme outliers relative to the rest of the data, it is of interest that all states in this group are from the same geographical region. What is it about the northeast that caused above average mortality rates?
+While not extreme outliers, it is notable that all states in this group belong to the same geographical region. What factors in the Northeast contribute to above-average mortality rates?
 
-It might seem reasonable to investigate these clusters independently, but what if they are more closely related than I might think? In my initial assessment of the data set and its variables, I highlighted my aversion to using cumulative or absolute values in my analysis, as they limit the ability to compare data across regions. In using population as a metric on its own I have gone against my own thinking. I need to transform population to a new metric that can be used in state-to-state comparison: 'population density':
+Investigating these clusters independently may seem logical, but what if they are more interconnected than they appear? 
 
-**Population density** = (population / area_kmsq) , expressed as 'people per square km'
+Earlier, I noted my preference to avoid using cumulative or absolute values, as they limit the ability to make meaningful regional comparisons. However, by relying solely on population as a metric, I have strayed from that principle. To address this, I will transform population into a new metric suitable for state-to-state comparison: 'population density'.
+
+**Population Density** = (population / area_kmsq) , expressed as 'people per square km'
 
 ```{r Population density x Mortality}
 # Create a scatterplot: population density vs mortality rate grouped by US State
@@ -327,20 +329,18 @@ covid19_usa |>
   )
 ```
 
-The fit between these two variables is much better than when I used population alone. Theoretically, this makes sense; the more people in any given space, the greater the likelihood that the virus will spread, and as a result the chance of mutation into a more deadly variant also increases.
+The fit between these two variables is significantly better than when using population alone. This makes theoretical sense; the more people in any given space, the greater the likelihood that the virus will spread and as a result the increased chance of mutation into a more deadly variant. 
 
-I have briefly explored the concept of mortality rate and some of the factors that may lead to variation in our observations. It is important to note that in my analysis so far, I have looked at averages of a 3-year time period (2020-2023). This analysis is static in nature, and does not explore how mortality changes over time. 
-
-Coronavirus is a rapidly changing phenomenon. From mutations in the virus itself, to the onset of available vaccines, no aspect of this pandemic has ever been static. In the next section, I will focus on how mortality rate changes **over time**.
+I have briefly examined the concept of mortality rate and the factors that contribute to variations in our observations. It is important to note that this analysis so far considers averages over a 3-year period (2020-2023). This static approach does not explore how mortality rate changes over time. Coronavirus is a rapidly changing phenomenon. From virus mutations to the availability of vaccines, no aspect of this pandemic has remained static. In the next section, I will focus on how mortality rates change **over time**.
 
 # Mortality and the Passage of Time
 
-I'm interested in learning about how mortality rate changes over time, but I need to take note of some important points:
+I’m interested in understanding how mortality rates change over time, but I need to consider some important points:
 
-1. Viruses take time to spread, patient zero cannot pass the virus to 100,000 others in one day, transmission rates increase over time.
-2. Initial public reaction to COVID19 was very cautious and risk-averse. In the early parts of 2020, knowledge of the virus and its impact were not fully known. As a result, many countries enforced strict public health measures to reduce transmission.
+1. Viruses take time to spread, patient zero cannot pass the virus to 100,000 others in a day, transmission rates increase over time.
+2. Initially, public reaction to COVID19 was cautious and risk averse. In early 2020, the virus and its impacts were not fully known, leading many countries to enforce strict public health measures to reduce transmission.
 
-Given these factors, the volume of data is not spread evenly across the timeline, with many days in early 2020 containing NIL observations for some variables. This leads to sample size issues: Take a look at the mortality rates for some of the days in early 2020:
+Given these factors, the volume of data is uneven across the timeline, with many days in early 2020 containing NIL observations for some variables. This leads to sample size issues, for example look at the mortality rates for some of the days in early 2020:
 
 ```{r Small sample size example}
 covid19_usa |> 
@@ -350,25 +350,23 @@ covid19_usa |>
   arrange(desc(mortality))
 ```
 
-To overcome this and reduce extreme values in periods where sample size is low, I will bin our time series into periods. I will be split the timeline into (e.g. months) and take an average value of any given variable for that period.
+To address this issue and reduce extreme values during periods of low sample size, I will aggregate  the time series data into specific periods, such as months. This approach involves dividing the timeline into intervals (i.e. months) and calculating the average value of any given variable for each period.
 
-**What do I want to know?**
+**What Do I Want to Know?**
 
-1. States in the northeast region observed the highest mortality rates in the country, was this always the case?
+1. States in the northeast region observed the highest mortality rates in the country. Was this always the case?
 
-2. Were there any specific periods in time where mortality trended up or down across all states?
+2. Were there specific periods when mortality trended upward or downward across all states?
 
-**What are my preconceptions?**
+**What Are My Assumptions?**
 
-1. I expect that mortality will trend down over time. As the population develops layers of immunity (natural & vaccine), the marginal threat of each new case decreases.
+1. I expect that mortality will trend down over time as the population develops layers of immunity, both natural and through vaccinations. This should result in a decrease in the marginal threat of each new case.
 
-2. I anticipate mortality to eventually reach an equilibrium level. This relies on the below assumptions being (mostly) true:
- - Almost everyone will contract COVID19 at least once, those who survive will also survive subsequent infections.
- - Those that want to be vaccinated, will be.
+2. Mortality will reach an equilibrium level, assuming the following conditions are generally true:
+- Most individuals will contract COVID19 at least once, and those who recover will survive future infections.
+- Individuals who chose to be vaccinated will receive the vaccination.
 
-
-**NOTE:** Sometimes when conducting exploratory data analysis, I need to generate a visual that I know will be messy and/or useless for end-user consumption. In this case, I'm going to draw 50 line graphs on one plane. This will not look pretty, but it will serve its purpose in telling me what's occurring at a high level, and likely reveal any outliers.
-
+**NOTE**: During exploratory data analysis, it is sometimes necessary to create visuals that may be complex or not be suitable for end-user consumption. In this case, I am plotting 50 line-graphs on a single plane. While this will not be visually appealing, it will serve its purpose in providing high level overview and identifying any outliers.
 
 ```{r Mortality over time geom_line}
 # Create a line plot: mortality rate over time for each US state
@@ -401,9 +399,9 @@ covid19_usa |>
   )
 ```
 
-As expected, the plot messy and entirely unfit for public consumption (but still very useful for me right now). I can observe a clear downward trend, with the variation in observations between different states also decreasing over time. A notable point for me is the period in late 2021, where it appears every state observed a sharp decrease in mortality. What happened here?
+As expected, the above graph is messy and unsuitable for public consumption, though it remains useful for my analysis. I observe a clear downward trend, with the variation in observations amongst different states decreasing over time. A notable observation is the period in late 2021, where each state experienced a sharp decrease in mortality. What factors contributed to this occurrence? 
 
-Before I move on to explore this, I'd like to take a closer look at the Northeastern states, but adding labels to this already messy plot seems ill advised. I need to find another visualisation type to better convey this information:
+Before exploring further, it is important to examine the Northeastern states closely. Adding labels to this plot may not be effective. Therefore, I need to find an alternative visualisation type to better convey this information:
 
 ```{r Mortality over time geom_tile}
 # Create a tile visual: mortality rate over time for each US state
@@ -434,30 +432,32 @@ covid19_usa |>
   )
 ```
 
-This looks better, I can immediately see a few things:
+The above visualisation is more informative, allowing us to observe several key points:
 
-- The northeastern cluster of states all observed their above average mortality in 2020. 
-- From 2021 onwards,there is a remarkable absence of extreme values; all states observed a stable decrease in mortality from this point.
+- The northeastern cluster of states experienced above average mortality rate in 2020.
+- From 2021 onwards, there is a noticeable absence of extreme values. All states observed a consistent decrease in mortality from this point.
 
-So, what happened toward the end of 2021? Why did all states see a (relative) steep fall in mortality rate? I will start by looking at the most obvious variable... vaccines: and their relatiobship with mortality.
+What caused the significant drop in the mortality rates by the end of 2021? I will examine the most obvious variable: vaccines, and their relationship with mortality.
 
 # Vaccination and its Impact on Mortality
 
-Before I look at the relationship between vaccination and mortality, it is important to define how I will measure vaccination. The data set contains a 'people_fully_vaccinated' variable defined as: "Cumulative number of people who received all doses prescribed by the vaccination protocol". I envision some consistency issues when using this variable to compare between different geopolitical areas (the number of doses required to be 'fully vaccinated' may vary between regions). To overcome this, I will create a more standardised variable of 'average vaccine doses per person' by taking the cumulative sum of vaccine doses administered, divided by population.
+Before I examine the relationship between vaccination and mortality, it is important to define how I will measure vaccination. The dataset contains a ‘people_fully_vaccinated’ variable indicating the cumulative number of people who received all required doses prescribed by the vaccination protocol. 
 
-**Average vaccine doses per person** = (vaccines / population)
+However, this may vary between regions due to different vaccination protocols. To ensure consistency, I will create a standardised variable, 'average vaccine doses per person' by dividing the cumulative sum of vaccine doses administered by the population.
 
-One more piece of admin regarding timelines: Given the first vaccine in the US was administered in December 2020, I will subset the time frame for this part of the analysis to include 2021-2023 only. I only want to focus on the variability in mortality that can possibly be explained by vaccination, so the pre-vaccine period will not be observed.
+**Average Vaccine Doses Per Person** = (vaccines / population)
 
-**What do I want to know?**
+Regarding timelines, given the first vaccine in the US was administered in December 2020, the time frame for this part of the analysis will be limited to 2021-2023. The focus will be on the variability in mortality that can be attributed to vaccination, so the pre-vaccine period will not be included.
 
-1. How strong is the relationship between vaccination and mortality, is there a point where we start to observe diminishing returns?
-2. If vaccines were widely available from early 2021, why might the sharp fall in mortality have occured almost 12 months later? Is there a chance this was not vaccine related?
+**What Do I Want to Know?**
 
-**What are my preconceptions?**
+1. How strong is the relationship between vaccination and mortality? Is there a point where we observe diminishing returns?
+2. If vaccines were widely available from early 2021, why did the sharp fall in mortality happen almost 12 months later? Could this decrease be attributed to factors other than vaccination? 
 
-1. I anticipate to find a mildly negative relationship between vaccination and mortality. The reason I say mildly is because there are far too many other factors I have not controlled for, and some that I cannot control.
-2. It is certainly possible that I will observe some states exhibit both high mortality and high vaccination. This could be a result of causational factors, where because mortality is already high in a certain area, more people go out to get vaccinated.
+**What Are My Assumptions?**
+
+1. I expect to observe a mildly negative relationship between vaccination and mortality rate. The reason for using ‘mildly’ is because there are numerous uncontrolled variables, some of which are beyond my capacity to control.
+2. It is possible that some states exhibit both high mortality rates and high vaccination rates. This may be due to causational factors, where high mortality is an area prompts more people to get vaccinated.
 
 ```{r Vaccine doses x Mortality}
 # Create a line plot: average vaccine doses vs mortality rate for each US state
@@ -492,12 +492,12 @@ covid19_usa |>
   )
 ```
 
-I didn't learn a whole lot more here. In fact, I've thought a little more about our measure of 'average doses per person' and it may not be as suitable as initially thought. For example, Take 3 people and 3 vaccine doses:
+Not much additional information is provided in the above chart. Upon further consideration, the measure of average doses per person may not be as suitable as initially thought. For example, consider three people and three vaccine doses:
 
 - Scenario 1: Each person receives (1) dose.
 - Scenario 2: One person receives (2) doses, another receives (1) and the last person receives (0).
 
-In both these scenarios, the average doses per person are equal (1), however I cannot know if the impact on mortality will be equal in reality. Acknowledging this potential flaw, I will revert to the 'people_fully_vaccinated' variable, and hope that it holds up when comparing across states within the US only.
+While the average doses per person are equal (1) in both scenarios, the actual impact on mortality will vary. Acknowledging this potential flaw, I will revert to using the ‘people_fully_vaccinated’ variable, and compare it across all US states.
 
 ```{r Prop_full_vax x Mortality}
 # Create a line plot: population vaccination percentage vs mortality rate.
@@ -533,9 +533,11 @@ covid19_usa |>
   )
 ```
 
-Here I observe a significant difference in the rate of change (gradient) for mortality between the bands I have created. Unfortunately, until I quantify a trend it is nothing more than speculation. I will take this opportunity to move away from this visual; outside of trying to navigate between the 50 squiggly lines on this chart, its not entirely clear how the rate of change increases(decreases) between vaccination brackets. I'd like to compare the differences in average mortality when moving between the 50-60%, 60-70% and 70-80% brackets.
+In the above plot, I observe a significant difference in the rate of change (gradient) for mortality between the bands I have created. Unfortunately, until I quantify a trend it is nothing more than speculation. I will take this opportunity to move away from this visual; outside of trying to navigate between the 50 squiggly lines on this chart, its not entirely clear how the rate of change increases(decreases) between vaccination brackets. I'd like to compare the differences in average mortality when moving between the 50-60%, 60-70% and 70-80% brackets.
 
-**The plan:** Determine the mortality for each state at the 0.5, 0.6, 0.7 and 0.8 (noting that not all states will reach each threshold). I will then join our 4 new data frames and calculate the average % change in mortality observed between each threshold.
+Here I observe a significant difference in the rate of change (gradient) for mortality between the bands I have created. However, until I quantify a trend it remains speculation.I will take this opportunity to move away from this visual as it is difficult to interpret the 50 lines on the chart and how the rate of change increases (decreases) between vaccination brackets. I propose comparing the differences in **average** mortality when moving between the 50-60%, 60-70% and 70-80% brackets.
+
+**The Plan:** Calculate the mortality for each state at the 0.5, 0.6, 0.7 and 0.8 thresholds (noting that not all states will reach all thresholds). I will then join the four new data frames and calculate the average percentage change in mortality between each threshold.
 
 ```{r Percent change in mortality between vaccination thresholds}
 # Calculate the mortality rate at the point in time that each state reached 50% full vaccination.
@@ -622,24 +624,22 @@ mean(vax_all_bands$perc_change_70_80, na.rm = TRUE)
 ```
 
 
-I observe the following (relative) percent decreases in average mortality rate between each vaccination threshold:
+I observe the following (relative) percent decreases in the average mortality rate between each vaccination threshold:
 
 - 50% to 60% : -4.00%
 - 60% to 70% : -9.30%
 - 70% to 80% : -41.20%
 
-This is quite an extraordinary observation, the comparative rate of change between each bracket is fascinating. Given the relative plateau up to the ~50% fully vaccinated mark, it's very interesting to see mortality fall so steeply afterwards.
-Throughout the vaccine campaign here in Victoria, the Department of Health put heavy emphasis on the importance of reaching these vaccination thresholds, so it is pleasing to see that at there seems to be merit to the research, at least on an empirical level.
+The comparative rate of change between each bracket is noteworthy. Given the relative plateau up to the ~50% fully vaccinated mark, it is notable to see mortality decrease steeply afterwards. Throughout the vaccine campaign here in Victoria (Australia), the Department of Health emphasised the importance of reaching these vaccination thresholds, so it is pleasing to see that at there seems to be merit to the research, at least on an empirical level.
 
-In the last section, there are two aspects I'd like to explore:
+In the final section, there are two aspects I'd like to explore:
 
-1. Previously, I used a messy visual to get an idea and contextualise some observations. How can I present these findings in a way that is fit for public consumption? I will look at how we can better communicate vaccination levels across each US state.
-2. The visual I created above also has an issue where it relates to 'time'. Any given point on the x axis represents many different snapshots in time. It may be useful to find a new visual that represents how long it took each state to reach any given threshold. This would be of far more interest to users who wish to know how quickly their state got vaccinated relative to the rest of the country.
-
+1. Previously, I used a messy visual to get an idea and contextualise some observations. How can I present these findings in a way that is fit for public consumption? I will examine how I can better communicate vaccination levels across each US state.
+2. The current visual has an issue with representing ‘time’, as each point on the x-axis covers multiple snapshots in time. To address this, it will be useful to show a new visual that represents how long it took each state to reach a given threshold. This will be more useful to users who wish to know how quickly their state became vaccinated relative to the rest of the country.
 
 # A Colourful Finish
 
-In this final part, I will take the ideas generated about vaccination in the last chapter and look to create some interesting, user friendly visuals. I will start by taking the current (end of 2022) vaccination rate for each state and overlaying it on a map of the US.
+In this final part, I will use the vaccination ideas generated in the last section to create engaging user-friendly visuals. Let’s start by taking each state’s current (end of 2022) vaccination rate and overlaying it on a map of the US.
 
 ```{r USA Vaccination Map}
 # Calculate the current (31-Dec-2022) proportion of each state's population that is fully vaccinated.
@@ -693,7 +693,7 @@ us_vaccination_map <- us_map_all |>
 us_vaccination_map
 ```
 
-This map looks pretty similar to something I've seen before... let's take a look at the 2020 election map:
+The above map looks similar to something I've seen before... let's take a look at the 2020 election map:
 
 ```{r USA Vaccination Map + 2020 Election Map}
 # Create a Map visual showing the results of the 2020 US election (Alaska & Hawaii removed for visual purposes)
@@ -719,7 +719,9 @@ library(patchwork)
 (us_vaccination_map / us_2020_election_map)
 ```
 
-Now I will address how I could better illustrate time where it relates to reaching vaccination thresholds. I will calculate how long it took each state to reach 80% full vaccination and explore the most engaging ways to visualise this information.
+This comparison highlights that people living in democratic states are, on average, more likely to be fully vaccinated than those in republican states.
+
+I will now address how to better illustrate the time taken to reach vaccination thresholds. Specifically, I will calculate how long it took each state to reach 80% full vaccination and explore the most engaging ways to visualise this information.
 
 ```{r Race to 80 Vaccination geom_line}
 # Calculate each state's vaccination rate at each day from 2021 onwards (for those that reached 80%)
@@ -773,7 +775,8 @@ vax_race_80 |>
 
 ```
 
-This visual works well due the the small number of states (7) that reached the 80% vaccination threshold. If I wanted to look at a lower threshold, it may be best to use a different visual to prevent over plotting. Take the 70% vaccination threshold, which 20 states reached before 2023:
+The above visual is effective and works well due the small number of states (7) that reached the 80% vaccination threshold. If I wanted to examine a lower threshold, such as 70%, which 20 states reach in 2023, a different visual may be more effective to prevent over-plotting:
+
 
 ```{r Race to 70 Vaccination geom_col}
 # Calculate each state's vaccination rate at each day from 2021 onwards (for those that reached 70%)
@@ -835,4 +838,6 @@ days_to_70 |>
   )
 ```
 
-By using a column chart, I am able to include more data in a similar sized space compared to the line plot. This  comes at the expense of being able to see how each state tracked in the time period leading up to reaching 70%. When deciding which visual to use, I always need to consider multiple aspects in evaluating what is most useful for our audience.
+By using a column chart as detailed above, I can include more data in a similar sized space compared to the line plot. However, it sacrifices the ability to track each state's progress over time towards 70%. Deciding which visual to use requires considering what will be most useful for our audience.
+
+The visual representation of vaccination data is crucial for effectively communicating the progress and achievements of public health initiatives. By carefully selecting the appropriate visual formats, I can ensure that the information is both engaging and informative. The choice of visualisation should be guided by the nature of the data and the needs of the audience, allowing for a clear and comprehensive understanding of the trends and milestones I am trying to communicate.
